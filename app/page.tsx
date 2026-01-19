@@ -13,13 +13,40 @@ export default function Home() {
     setReply("");
 
     try {
-      const response = await fetch("api/hello-claude", {
+      const response = await fetch("/api/generate-story", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      const data = await response.json();
-      setReply(data.reply);
+
+      // Check if request was successful
+      if (!response.ok) {
+        setReply(`Error: ${response.status} - Failed to generate story`);
+        setLoading(false);
+        return;
+      }
+
+      // Check if we have a body to stream
+      if (!response.body) {
+        setReply("Error: No response received from the server");
+        setLoading(false);
+        return;
+      }
+
+      // Get a reader to read the stream
+      const reader = response.body.getReader();
+      // Create a decoder to convert bytes to text
+      const decoder = new TextDecoder();
+      // Read the stream chunk by chunk
+      while (true) {
+        const { done, value } = await reader.read();
+        // If stream is done, exit the loop
+        if (done) break;
+        // Decode the chunk from bytes to text
+        const chunk = decoder.decode(value, { stream: true });
+        // Append this chunk to the existing reply
+        setReply((prev) => prev + chunk);
+      }
     } catch {
       setReply("Error: Could not connect to API");
     } finally {
@@ -57,7 +84,12 @@ export default function Home() {
       {reply && (
         <div className="mt-8 p-6 bg-gray-50 rounded-lg">
           <h2 className="font-semibold mb-2">Response:</h2>
-          <p className="whitespace-pre-wrap">{reply}</p>
+          <p className="whitespace-pre-wrap">
+            {reply}
+            {loading && (
+              <span className="inline-block w-0.5 h-4 bg-blue-600 animate-pulse ml-1" />
+            )}
+          </p>
         </div>
       )}
     </main>
